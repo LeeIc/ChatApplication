@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Chatting_Client.Views;
 
 namespace Chatting_Client
 {
@@ -9,6 +10,8 @@ namespace Chatting_Client
       var builder = MauiApp.CreateBuilder();
       builder
         .UseMauiApp<App>()
+                  .RegisterViewModels()
+
         .ConfigureFonts(fonts =>
         {
           fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -20,6 +23,13 @@ namespace Chatting_Client
 #endif
 
       return builder.Build();
+    }
+
+    private static MauiAppBuilder RegisterViewModels(this MauiAppBuilder mauiAppBuilder)
+    {
+      mauiAppBuilder.Services.AddSingleton<MainViewModel>();
+
+      return mauiAppBuilder;
     }
   }
 }

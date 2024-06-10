@@ -1,12 +1,14 @@
-﻿namespace Chatting_Client
+﻿using Chatting_Client.Views;
+
+namespace Chatting_Client
 {
   public partial class App : Application
   {
-    public App()
+    public App(MainViewModel mainViewModel)
     {
       InitializeComponent();
 
-      MainPage = new AppShell();
+      MainPage = new MainView(mainViewModel);
     }
   }
 }

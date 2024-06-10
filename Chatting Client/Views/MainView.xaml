@@ -1,0 +1,64 @@
+﻿<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:custom="clr-namespace:Chatting_Client.Views.Custom"
+             x:Class="Chatting_Client.Views.MainView"
+             BackgroundColor="LightGray">
+  <Grid RowSpacing="50"
+        VerticalOptions="End"
+        HorizontalOptions="Start"
+        Margin="10">
+
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- Messages -->
+    <Grid Grid.Row="0">
+      <CollectionView  ItemsSource="{Binding Messages}"
+                       ItemsUpdatingScrollMode="KeepLastItemInView">
+        <CollectionView.ItemTemplate>
+          <DataTemplate>
+            <StackLayout>
+              <Label Text="{Binding .}"
+                     TextColor="Black"
+                     FontSize="30" />
+            </StackLayout>
+          </DataTemplate>
+        </CollectionView.ItemTemplate>
+      </CollectionView>
+    </Grid>
+
+    <Grid Grid.Row="1">
+      <!-- User Selector -->
+      <VerticalStackLayout Spacing="20"
+                           IsVisible="{Binding IsUserSelectorVisible}">
+
+        <Entry Text="{Binding Username}"
+               Placeholder="Enter Username"
+               TextColor="Black"
+               BackgroundColor="White"
+               IsSpellCheckEnabled="True"
+               FontSize="30" />
+
+        <Button Text="Connect"
+                Command="{Binding ConnectUserCommand}"
+                FontSize="30" />
+      </VerticalStackLayout>
+
+      <!-- Message entry -->
+      <VerticalStackLayout Spacing="20"
+                           IsVisible="{Binding IsMessageEntryVisible}">
+        <Entry Text="{Binding Message}"
+               Placeholder="Enter Message"
+               TextColor="Black"
+               BackgroundColor="White"
+               IsSpellCheckEnabled="True"
+               FontSize="30" />
+        <Button Text="Send"
+                Command="{Binding SendMessageCommand}"
+                FontSize="30" />
+      </VerticalStackLayout>
+    </Grid>
+  </Grid>
+</ContentPage>
