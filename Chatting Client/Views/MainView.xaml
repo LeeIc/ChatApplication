@@ -33,7 +33,14 @@
       <!-- User Selector -->
       <VerticalStackLayout Spacing="20"
                            IsVisible="{Binding IsUserSelectorVisible}">
-
+        
+        <Entry Text="{Binding IpAddressAndPort}"
+               Placeholder="Enter IP address and port "
+               TextColor="Black"
+               BackgroundColor="White"
+               IsSpellCheckEnabled="True"
+               FontSize="30" />
+        
         <Entry Text="{Binding Username}"
                Placeholder="Enter Username"
                TextColor="Black"

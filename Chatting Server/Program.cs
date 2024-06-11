@@ -6,7 +6,7 @@ using System.Text;
 
 public class Program
 {
-  private static ConcurrentBag<TcpClient> clients = new ConcurrentBag<TcpClient>();
+  static ConcurrentDictionary<string, TcpClient> clients = new ConcurrentDictionary<string, TcpClient>();
   private static BlockingCollection<string> messages = new BlockingCollection<string>();
   static async Task Main(string[] args)
   {
@@ -26,7 +26,7 @@ public class Program
 
   static async Task StartServer()
   {
-    TcpListener listener = new TcpListener(IPAddress.Loopback, 4356);
+    TcpListener listener = new TcpListener(IPAddress.Any, 1857);
     listener.Start();
     Console.WriteLine("Server started...");
 
@@ -35,15 +35,16 @@ public class Program
       try
       {
         TcpClient client = await listener.AcceptTcpClientAsync();
-        Console.WriteLine("Client connected...");
-        clients.Add(client);
-        foreach(var message in messages)
+        string clientId = Guid.NewGuid().ToString();
+        Console.WriteLine($"Client connected with ID: {clientId}");
+        clients.TryAdd(clientId, client);
+        foreach (var message in messages)
         {
           NetworkStream stream = client.GetStream();
           byte[] buffer = Encoding.UTF8.GetBytes(message + "\n");
           await stream.WriteAsync(buffer, 0, buffer.Length);
         }
-        _ = Task.Run(() => HandleClient(client));
+        _ = Task.Run(() => HandleClient(clientId, client));
       }
       catch (Exception ex)
       {
@@ -52,7 +53,7 @@ public class Program
     }
   }
 
-  static async Task HandleClient(TcpClient client)
+  static async Task HandleClient(string clientId, TcpClient client)
   {
     try
     {
@@ -79,7 +80,7 @@ public class Program
     }
     finally
     {
-      clients.TryTake(out _);
+      clients.TryRemove(clientId, out _);
       client.Close();
       Console.WriteLine("Client disconnected...");
     }
@@ -89,7 +90,7 @@ public class Program
   {
     byte[] buffer = Encoding.UTF8.GetBytes(message);
 
-    foreach (var client in clients)
+    foreach (var client in clients.Values)
     {
       if (client != sender && client.Connected)
       {

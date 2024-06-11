@@ -14,8 +14,18 @@ namespace Chatting_Client.Views
     public event PropertyChangedEventHandler? PropertyChanged;
 
     #region Bindable properties
-    public ICommand ConnectUserCommand { get; private set; } = null!;
+    public IAsyncRelayCommand ConnectUserCommand { get; private set; } = null!;
     public IAsyncRelayCommand SendMessageCommand { get; private set; } = null!;
+    public string IpAddressAndPort
+    {
+      get { return ipAddressAndPort; }
+      set
+      {
+        ipAddressAndPort = value;
+        OnPropertyChanged();
+      }
+    }
+    private string ipAddressAndPort = "192.168.1.32:1857";
 
     public string Username
     {
@@ -84,7 +94,7 @@ namespace Chatting_Client.Views
     {
       messages = new ObservableCollection<string>();
       SetupCommands();
-      this.PropertyChanged += PropertyChangedHandler;
+      //this.PropertyChanged += PropertyChangedHandler;
     }
     #endregion
     #region Public Methods
@@ -96,57 +106,68 @@ namespace Chatting_Client.Views
     #region Private methods
     private void SetupCommands()
     {
-      ConnectUserCommand = new Command(ConnectUser);
+      ConnectUserCommand = new AsyncRelayCommand(ConnectUser);
       SendMessageCommand = new AsyncRelayCommand(SendMessage);
     }
-    private void PropertyChangedHandler(object? sender, PropertyChangedEventArgs e)
+    /*private void PropertyChangedHandler(object? sender, PropertyChangedEventArgs e)
     {
       switch (e.PropertyName)
       {
         case "Username":
-         
+
           break;
       }
-    }
-    private void ConnectUser()
+    }*/
+    private async Task ConnectUser()
     {
       if (Username == string.Empty)
       {
-        IsUserSelectorVisible = true;
-        IsMessageEntryVisible = false;
+        ShowConnectScreen(true);
         return;
       }
-      try
+      await Task.Run(async () =>
       {
-        client = new TcpClient(IPAddress.Loopback.ToString(), 4356);
-        stream = client.GetStream();
-        /*if (stream != null && stream.CanWrite)
-        {
-          string message = $"System: {Username} connected to the server";
-          byte[] buffer = Encoding.UTF8.GetBytes(message);
-          await stream.WriteAsync(buffer, 0, buffer.Length);
-          DisplayMessage(message);
-          Message = string.Empty;
-        }*/
-        _ = Task.Run(() => ReceiveMessages());
-        IsUserSelectorVisible = false;
-        IsMessageEntryVisible = true;
-      }
-      catch (Exception ex)
-      {
-        DisplayMessage($"Error: {ex.Message}");
-      }
+          ProcessIpAddressAndPort(out string ip, out string port);
+          client = new TcpClient();
+          if (!client.ConnectAsync(ip, int.Parse(port)).Wait(1000))
+          {
+            DisplayMessage($"Error: Could not connect to Server");
+            return;
+          }
+          stream = client.GetStream();
+          ClearMessages();
+          /*if (stream != null && stream.CanWrite)
+          {
+            string message = $"System: {Username} connected to the server";
+            byte[] buffer = Encoding.UTF8.GetBytes(message);
+            await stream.WriteAsync(buffer, 0, buffer.Length);
+            DisplayMessage(message);
+            Message = string.Empty;
+          }*/
+          _ = Task.Run(async () => await ReceiveMessages());
+          ShowConnectScreen(false);
+      });
+
     }
 
     private async Task SendMessage()
     {
-      if (stream != null && stream.CanWrite)
+      try
       {
-        string message = $"{Username}: {Message}";
-        byte[] buffer = Encoding.UTF8.GetBytes(message);
-        await stream.WriteAsync(buffer, 0, buffer.Length);
-        DisplayMessage(message);
-        Message = string.Empty;
+        if (stream != null && stream.CanWrite)
+        {
+          string message = $"{Username}: {Message}";
+          byte[] buffer = Encoding.UTF8.GetBytes(message);
+          await stream.WriteAsync(buffer, 0, buffer.Length);
+          DisplayMessage(message);
+          Message = string.Empty;
+        }
+      }
+      catch (Exception ex)
+      {
+        ClearMessages();
+        DisplayMessage($"Error: {ex.Message}");
+        ShowConnectScreen(true);
       }
     }
 
@@ -157,6 +178,7 @@ namespace Chatting_Client.Views
         Messages.Add(message);
       });
     }
+
     private async Task ReceiveMessages()
     {
       byte[] buffer = new byte[1024];
@@ -168,6 +190,39 @@ namespace Chatting_Client.Views
         DisplayMessage(message);
       }
     }
+
+    private void ShowConnectScreen(bool isShown)
+    {
+      MainThread.BeginInvokeOnMainThread(() =>
+      {
+        if(isShown)
+        {
+          IsUserSelectorVisible = true;
+          IsMessageEntryVisible = false;
+        }
+        else
+        {
+          IsUserSelectorVisible = false;
+          IsMessageEntryVisible = true;
+        }
+      });
+    }
+
+    private void ClearMessages()
+    {
+      MainThread.BeginInvokeOnMainThread(() =>
+      {
+        Messages.Clear();
+      });
+    }
+
+    private void ProcessIpAddressAndPort(out string ip, out string port)
+    {
+      var splitIpAddressAndPort = IpAddressAndPort.Split(":");
+      ip = splitIpAddressAndPort[0];
+      port = splitIpAddressAndPort[1];
+    }
+
     #endregion
   }
 }
