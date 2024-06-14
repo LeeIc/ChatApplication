@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Chatting_Client.Views;
-
+using Plugin.LocalNotification;
 namespace Chatting_Client
 {
   public static class MauiProgram
@@ -10,8 +10,8 @@ namespace Chatting_Client
       var builder = MauiApp.CreateBuilder();
       builder
         .UseMauiApp<App>()
-                  .RegisterViewModels()
-
+        .RegisterViewModels()
+        .UseLocalNotification()
         .ConfigureFonts(fonts =>
         {
           fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -19,7 +19,7 @@ namespace Chatting_Client
         });
 
 #if DEBUG
-  		builder.Logging.AddDebug();
+      builder.Logging.AddDebug();
 #endif
 
       return builder.Build();

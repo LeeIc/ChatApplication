@@ -1,8 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Net.Sockets;
-using System.Net;
 using System.Runtime.CompilerServices;
-using System.Windows.Input;
+using Plugin.LocalNotification;
 using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
@@ -125,7 +124,7 @@ namespace Chatting_Client.Views
         ShowConnectScreen(true);
         return;
       }
-      await Task.Run(async () =>
+      await Task.Run(() =>
       {
           ProcessIpAddressAndPort(out string ip, out string port);
           client = new TcpClient();
@@ -187,6 +186,14 @@ namespace Chatting_Client.Views
       {
         byteCount = await stream.ReadAsync(buffer, 0, buffer.Length);
         string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
+
+        var request = new NotificationRequest
+        {
+          NotificationId = 1,
+          Title = "New Message",
+          Description = message
+        };
+        await LocalNotificationCenter.Current.Show(request);
         DisplayMessage(message);
       }
     }
