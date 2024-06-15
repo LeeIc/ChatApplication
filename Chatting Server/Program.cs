@@ -3,11 +3,16 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Timers;
 
 public class Program
 {
   static ConcurrentDictionary<string, TcpClient> clients = new ConcurrentDictionary<string, TcpClient>();
+  static ConcurrentDictionary<string, System.Timers.Timer> clientTimers = new ConcurrentDictionary<string, System.Timers.Timer>();
   private static BlockingCollection<string> messages = new BlockingCollection<string>();
+  private const string heartbeatMessage = "HEARTBEAT";
+  private const int heartbeatInterval = 3660000; // 1 hr 3600000
+
   static async Task Main(string[] args)
   {
     try
@@ -21,6 +26,18 @@ public class Program
     finally
     {
       Console.WriteLine("Server shutting down...");
+    }
+  }
+
+  ~Program()
+  {
+    foreach (var client in clients.Values)
+    {
+      client.Close();
+    }
+    foreach (var clientTimer in clientTimers.Values)
+    {
+      clientTimer.Elapsed -= OnHeartbeatTimerElapsed;
     }
   }
 
@@ -38,13 +55,16 @@ public class Program
         string clientId = Guid.NewGuid().ToString();
         Console.WriteLine($"Client connected with ID: {clientId}");
         clients.TryAdd(clientId, client);
+        var newTimer = new CustomTimer(heartbeatInterval) { ClientId = clientId };
+        newTimer.Elapsed += OnHeartbeatTimerElapsed;
+        clientTimers.TryAdd(clientId, newTimer);
         foreach (var message in messages)
         {
           NetworkStream stream = client.GetStream();
           byte[] buffer = Encoding.UTF8.GetBytes(message + "\n");
           await stream.WriteAsync(buffer, 0, buffer.Length);
         }
-        _ = Task.Run(() => HandleClient(clientId, client));
+        _ = Task.Run(() => HandleClient(clientId, client, newTimer));
       }
       catch (Exception ex)
       {
@@ -53,7 +73,7 @@ public class Program
     }
   }
 
-  static async Task HandleClient(string clientId, TcpClient client)
+  static async Task HandleClient(string clientId, TcpClient client, CustomTimer timer)
   {
     try
     {
@@ -66,11 +86,29 @@ public class Program
         while ((byteCount = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
         {
           string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
-          messages.Add(message);
-          Console.WriteLine($"Received: {message}");
 
-          // Broadcast the message to all clients
-          await BroadcastMessage(message, client);
+          Console.WriteLine($"Received: {message}");
+          // Reset timer if any messages are received
+          timer?.Stop();
+          timer?.Start();
+          if (message == heartbeatMessage)
+          {
+            try
+            {
+              buffer = Encoding.UTF8.GetBytes(message);
+              await stream.WriteAsync(buffer, 0, buffer.Length);
+            }
+            catch (Exception ex)
+            {
+              Console.WriteLine($"Error sending to client: {ex.Message}");
+            }
+          }
+          else
+          {
+            messages.Add(message);
+            // Broadcast the message to all clients
+            await BroadcastMessage(message, client);
+          }
         }
       }
     }
@@ -82,7 +120,9 @@ public class Program
     {
       clients.TryRemove(clientId, out _);
       client.Close();
-      Console.WriteLine("Client disconnected...");
+      clientTimers.TryRemove(clientId, out _);
+      timer.Elapsed -= OnHeartbeatTimerElapsed;
+      Console.WriteLine($"{clientId} disconnected...");
     }
   }
 
@@ -106,4 +146,17 @@ public class Program
       }
     }
   }
+
+  private static void OnHeartbeatTimerElapsed(object? sender, ElapsedEventArgs e)
+  {
+    string? clientId = ((CustomTimer?)sender)?.ClientId;
+    if (clientId == null)
+      return;
+    clients[clientId].Close();
+    clients.TryRemove(clientId, out _);
+    clientTimers[clientId].Elapsed -= OnHeartbeatTimerElapsed;
+    clientTimers.TryRemove(clientId, out _);
+    Console.WriteLine($"{clientId} stopped responding...");
+  }
+
 }

@@ -5,10 +5,11 @@ using Plugin.LocalNotification;
 using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
+using System.Timers;
 
 namespace Chatting_Client.Views
 {
-  public class MainViewModel : INotifyPropertyChanged
+  public class MainViewModel : INotifyPropertyChanged, IDisposable
   {
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -86,6 +87,11 @@ namespace Chatting_Client.Views
     #region Private Fields
     private TcpClient? client;
     private NetworkStream? stream;
+    private System.Timers.Timer heartbeatTimer;
+    private const int heartbeatInterval = 3600000; // 1 hr 3600000
+    private const string heartbeatMessage = "HEARTBEAT";
+    private CancellationTokenSource heartbeatCancellationTokenSource;
+    private bool isServerResponsive = true;
     #endregion
 
     #region Constructor
@@ -93,11 +99,17 @@ namespace Chatting_Client.Views
     {
       messages = new ObservableCollection<string>();
       SetupCommands();
-      //this.PropertyChanged += PropertyChangedHandler;
+      heartbeatTimer = new System.Timers.Timer(heartbeatInterval);
+      heartbeatTimer.Elapsed += OnHeartbeatTimerElapsed;
+      heartbeatCancellationTokenSource = new CancellationTokenSource();
     }
     #endregion
     #region Public Methods
-
+    public void Dispose()
+    {
+      heartbeatTimer.Elapsed -= OnHeartbeatTimerElapsed;
+      GC.SuppressFinalize(this);
+    }
     public void OnPropertyChanged([CallerMemberName] string name = "") =>
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     #endregion
@@ -108,15 +120,7 @@ namespace Chatting_Client.Views
       ConnectUserCommand = new AsyncRelayCommand(ConnectUser);
       SendMessageCommand = new AsyncRelayCommand(SendMessage);
     }
-    /*private void PropertyChangedHandler(object? sender, PropertyChangedEventArgs e)
-    {
-      switch (e.PropertyName)
-      {
-        case "Username":
 
-          break;
-      }
-    }*/
     private async Task ConnectUser()
     {
       if (Username == string.Empty)
@@ -124,27 +128,27 @@ namespace Chatting_Client.Views
         ShowConnectScreen(true);
         return;
       }
-      await Task.Run(() =>
+      await Task.Run(async () =>
       {
-          ProcessIpAddressAndPort(out string ip, out string port);
-          client = new TcpClient();
-          if (!client.ConnectAsync(ip, int.Parse(port)).Wait(1000))
-          {
-            DisplayMessage($"Error: Could not connect to Server");
-            return;
-          }
-          stream = client.GetStream();
-          ClearMessages();
-          /*if (stream != null && stream.CanWrite)
-          {
-            string message = $"System: {Username} connected to the server";
-            byte[] buffer = Encoding.UTF8.GetBytes(message);
-            await stream.WriteAsync(buffer, 0, buffer.Length);
-            DisplayMessage(message);
-            Message = string.Empty;
-          }*/
-          _ = Task.Run(async () => await ReceiveMessages());
-          ShowConnectScreen(false);
+        ProcessIpAddressAndPort(out string ip, out string port);
+        client = new TcpClient();
+        if (!await TryConnectAsync(ip, int.Parse(port), 1000))
+        {
+          DisplayMessage($"Error: Could not connect to Server");
+          return;
+        }
+        stream = client.GetStream();
+        ClearMessages();
+        /*if (stream != null && stream.CanWrite)
+        {
+          string message = $"System: {Username} connected to the server";
+          byte[] buffer = Encoding.UTF8.GetBytes(message);
+          await stream.WriteAsync(buffer, 0, buffer.Length);
+          DisplayMessage(message);
+          Message = string.Empty;
+        }*/
+        _ = Task.Run(async () => await ReceiveMessages());
+        ShowConnectScreen(false);
       });
 
     }
@@ -170,6 +174,91 @@ namespace Chatting_Client.Views
       }
     }
 
+    private async void OnHeartbeatTimerElapsed(object? _, ElapsedEventArgs e)
+    {
+      // Send heartbeat message to the server
+      _ = SendHeartbeat();
+      isServerResponsive = false;
+      try
+      {
+        await Task.Delay(heartbeatInterval, heartbeatCancellationTokenSource.Token);
+        if (!isServerResponsive)
+        {
+          // Server did not respond to the previous heartbeat
+          OnServerDisconnected();
+        }
+      }
+      catch (TaskCanceledException)
+      {
+        // Response received
+      }
+      finally { heartbeatCancellationTokenSource = new CancellationTokenSource(); }
+    }
+
+    private async Task SendHeartbeat()
+    {
+      try
+      {
+        if (stream != null && stream.CanWrite)
+        {
+          byte[] buffer = Encoding.UTF8.GetBytes(heartbeatMessage);
+          await stream.WriteAsync(buffer, 0, buffer.Length);
+        }
+      }
+      catch (Exception ex)
+      {
+        OnServerDisconnected();
+      }
+    }
+
+    private void OnServerDisconnected()
+    {
+      isServerResponsive = false;
+      MainThread.BeginInvokeOnMainThread(async () =>
+      {
+        if (heartbeatTimer.Enabled == false)
+        {
+          return;
+        }
+        heartbeatTimer.Stop();
+        client?.Close();
+        ClearMessages();
+        var message = "Disconnected from server";
+        var request = new NotificationRequest
+        {
+          NotificationId = 1,
+          Title = "Error",
+          Description = message
+        };
+        await LocalNotificationCenter.Current.Show(request);
+        DisplayMessage(message);
+        ShowConnectScreen(true);
+      });
+    }
+    private async Task<bool> TryConnectAsync(string ip, int port, int timeout)
+    {
+      using (var cts = new CancellationTokenSource(timeout))
+      {
+        try
+        {
+          if (client != null)
+            await client.ConnectAsync(ip, port).WaitAsync(cts.Token);
+          else
+            return false;
+          return true;
+        }
+        catch (OperationCanceledException)
+        {
+          return false;
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine($"Connection attempt failed: {ex.Message}");
+          return false;
+        }
+      }
+    }
+
     private void DisplayMessage(string message)
     {
       MainThread.BeginInvokeOnMainThread(() =>
@@ -182,10 +271,18 @@ namespace Chatting_Client.Views
     {
       byte[] buffer = new byte[1024];
       int byteCount;
+      heartbeatTimer.Start();
       while (stream != null)
       {
         byteCount = await stream.ReadAsync(buffer, 0, buffer.Length);
         string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
+
+        if (message == heartbeatMessage)
+        {
+          isServerResponsive = true;
+          heartbeatCancellationTokenSource.Cancel();
+          continue; // Ignore heartbeat messages
+        }
 
         var request = new NotificationRequest
         {
@@ -202,7 +299,7 @@ namespace Chatting_Client.Views
     {
       MainThread.BeginInvokeOnMainThread(() =>
       {
-        if(isShown)
+        if (isShown)
         {
           IsUserSelectorVisible = true;
           IsMessageEntryVisible = false;
