@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -11,7 +10,7 @@ public class Program
   static ConcurrentDictionary<string, System.Timers.Timer> clientTimers = new ConcurrentDictionary<string, System.Timers.Timer>();
   private static BlockingCollection<string> messages = new BlockingCollection<string>();
   private const string heartbeatMessage = "HEARTBEAT";
-  private const int heartbeatInterval = 3660000; // 1 hr 3600000
+  private const int heartbeatInterval = 3660000; // little more than 1 hour
 
   static async Task Main(string[] args)
   {
@@ -58,6 +57,7 @@ public class Program
         var newTimer = new CustomTimer(heartbeatInterval) { ClientId = clientId };
         newTimer.Elapsed += OnHeartbeatTimerElapsed;
         clientTimers.TryAdd(clientId, newTimer);
+        newTimer?.Start();
         foreach (var message in messages)
         {
           NetworkStream stream = client.GetStream();
@@ -73,7 +73,7 @@ public class Program
     }
   }
 
-  static async Task HandleClient(string clientId, TcpClient client, CustomTimer timer)
+  static async Task HandleClient(string clientId, TcpClient client, CustomTimer? timer)
   {
     try
     {
@@ -105,6 +105,7 @@ public class Program
           }
           else
           {
+            message = $"[{DateTime.Now.ToString()}]\n" + message;
             messages.Add(message);
             // Broadcast the message to all clients
             await BroadcastMessage(message, client);
@@ -119,9 +120,10 @@ public class Program
     finally
     {
       clients.TryRemove(clientId, out _);
-      client.Close();
+      client?.Close();
       clientTimers.TryRemove(clientId, out _);
-      timer.Elapsed -= OnHeartbeatTimerElapsed;
+      if (timer != null)
+        timer.Elapsed -= OnHeartbeatTimerElapsed;
       Console.WriteLine($"{clientId} disconnected...");
     }
   }

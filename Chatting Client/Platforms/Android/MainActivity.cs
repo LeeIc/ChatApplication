@@ -19,7 +19,7 @@ namespace Chatting_Client
       {
         if (CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
         {
-          RequestPermissions(new string[] { Android.Manifest.Permission.PostNotifications }, 0);
+          RequestPermissions(new string[] { Android.Manifest.Permission.PostNotifications, Android.Manifest.Permission.WakeLock }, 0);
         }
         StartForegroundService(intent);
       }

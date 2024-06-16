@@ -5,7 +5,7 @@ VisualStudioVersion = 17.10.34916.146
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chatting Client", "Chatting Client\Chatting Client.csproj", "{337DB8C4-C2AA-4E34-AC89-7EACC47E002E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Chatting Server", "Chatting Server\Chatting Server.csproj", "{965B1AD1-B4CE-4A02-9F49-B176D1E54C67}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chatting Server", "Chatting Server\Chatting Server.csproj", "{965B1AD1-B4CE-4A02-9F49-B176D1E54C67}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

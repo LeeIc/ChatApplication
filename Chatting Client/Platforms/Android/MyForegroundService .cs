@@ -10,11 +10,13 @@ namespace Chatting_Client
   {
     private const int ServiceRunningNotificationId = 10000;
     private const string ChannelId = "my_foreground_service_channel";
+    private PowerManager.WakeLock? wakeLock;
 
     public override void OnCreate()
     {
       base.OnCreate();
       CreateNotificationChannel();
+      AcquireWakeLock();
     }
 
     public override IBinder? OnBind(Intent? intent)
@@ -57,6 +59,12 @@ namespace Chatting_Client
         manager?.CreateNotificationChannel(channel);
       }
     }
+    private void AcquireWakeLock()
+    {
+      var powerManager = (PowerManager?)GetSystemService(PowerService);
+      wakeLock = powerManager?.NewWakeLock(WakeLockFlags.Partial, "MyApp::MyWakelockTag");
+      wakeLock?.Acquire();
+    }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1422:Validate platform compatibility", Justification = "StopForeground is always available on Android")]
     public override void OnDestroy()
@@ -65,6 +73,7 @@ namespace Chatting_Client
       {
         StopForeground(true);
       }
+      wakeLock?.Release();
       base.OnDestroy();
     }
   }

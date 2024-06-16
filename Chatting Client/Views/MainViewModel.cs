@@ -87,11 +87,12 @@ namespace Chatting_Client.Views
     #region Private Fields
     private TcpClient? client;
     private NetworkStream? stream;
-    private System.Timers.Timer heartbeatTimer;
+    private readonly System.Timers.Timer heartbeatTimer;
     private const int heartbeatInterval = 3600000; // 1 hr 3600000
     private const string heartbeatMessage = "HEARTBEAT";
     private CancellationTokenSource heartbeatCancellationTokenSource;
     private bool isServerResponsive = true;
+
     #endregion
 
     #region Constructor
@@ -157,13 +158,21 @@ namespace Chatting_Client.Views
     {
       try
       {
-        if (stream != null && stream.CanWrite)
+        if (client?.Connected == true && stream != null && stream.CanWrite)
         {
           string message = $"{Username}: {Message}";
           byte[] buffer = Encoding.UTF8.GetBytes(message);
+          //await SendHeartbeat();
           await stream.WriteAsync(buffer, 0, buffer.Length);
-          DisplayMessage(message);
+          DisplayMessage($"[{DateTime.Now.ToString()}]\n" + message);
           Message = string.Empty;
+        }
+        else
+        {
+          client?.Close();
+          ClearMessages();
+          DisplayMessage($"Error: Disconnect or stream cannot be written to");
+          ShowConnectScreen(true);
         }
       }
       catch (Exception ex)
@@ -205,7 +214,7 @@ namespace Chatting_Client.Views
           await stream.WriteAsync(buffer, 0, buffer.Length);
         }
       }
-      catch (Exception ex)
+      catch (Exception)
       {
         OnServerDisconnected();
       }
@@ -223,6 +232,7 @@ namespace Chatting_Client.Views
         heartbeatTimer.Stop();
         client?.Close();
         ClearMessages();
+        Message = "";
         var message = "Disconnected from server";
         var request = new NotificationRequest
         {
@@ -242,18 +252,20 @@ namespace Chatting_Client.Views
         try
         {
           if (client != null)
-            await client.ConnectAsync(ip, port).WaitAsync(cts.Token);
+            await client.ConnectAsync(ip, port, cts.Token);
           else
             return false;
           return true;
         }
         catch (OperationCanceledException)
         {
+          client?.Close();  // Ensure the client is closed if the connection is canceled
           return false;
         }
         catch (Exception ex)
         {
           Console.WriteLine($"Connection attempt failed: {ex.Message}");
+          client?.Close();  // Ensure the client is closed on any exception
           return false;
         }
       }
@@ -277,17 +289,20 @@ namespace Chatting_Client.Views
         byteCount = await stream.ReadAsync(buffer, 0, buffer.Length);
         string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
 
-        if (message == heartbeatMessage)
+        if (message.Contains(heartbeatMessage))
         {
           isServerResponsive = true;
           heartbeatCancellationTokenSource.Cancel();
           continue; // Ignore heartbeat messages
         }
-
+        else if (message == "" || new string(message.Where(c => !char.IsControl(c)).ToString()) == "" || message == " " || message == "  ")
+        {
+          continue; // Ignore empty messages
+        }
         var request = new NotificationRequest
         {
           NotificationId = 1,
-          Title = "New Message",
+          Title = $"New Message",
           Description = message
         };
         await LocalNotificationCenter.Current.Show(request);
