@@ -22,7 +22,7 @@
             <StackLayout Spacing="7">
               <Label Text="{Binding .}"
                      TextColor="Black"
-                     FontSize="30" />
+                     FontSize="15" />
             </StackLayout>
           </DataTemplate>
         </CollectionView.ItemTemplate>
@@ -31,7 +31,7 @@
 
     <Grid Grid.Row="1">
       <!-- User Selector -->
-      <VerticalStackLayout Spacing="20"
+      <VerticalStackLayout Spacing="10"
                            IsVisible="{Binding IsUserSelectorVisible}">
 
         <Entry Text="{Binding IpAddressAndPort}"
@@ -39,18 +39,18 @@
                TextColor="Black"
                BackgroundColor="White"
                IsSpellCheckEnabled="True"
-               FontSize="30" />
+               FontSize="15" />
 
         <Entry Text="{Binding Username}"
                Placeholder="Enter Username"
                TextColor="Black"
                BackgroundColor="White"
                IsSpellCheckEnabled="True"
-               FontSize="30" />
+               FontSize="15" />
 
         <Button Text="Connect"
                 Command="{Binding ConnectUserCommand}"
-                FontSize="30" />
+                FontSize="15" />
       </VerticalStackLayout>
 
       <!-- Message entry -->
@@ -71,13 +71,13 @@
                   TextColor="Black"
                   BackgroundColor="White"
                   IsSpellCheckEnabled="True"
-                  FontSize="30"
+                  FontSize="15"
                   AutoSize="TextChanges" />
         </Grid>
         <Grid Grid.Column="1">
           <Button Text="Send"
                   Command="{Binding SendMessageCommand}"
-                  FontSize="30"
+                  FontSize="15"
                   VerticalOptions="Center"/>
         </Grid>
 
