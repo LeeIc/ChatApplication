@@ -12,8 +12,7 @@ public class Program
   private static TransmitHelper transmitHelper = new TransmitHelper();
   private static ReceiveHelper receiveHelper = new ReceiveHelper();
 
-  private const int heartbeatInterval = 2000; // 1 hr 3600000 3660000
-  private const string heartbeatMessage = "HEARTBEAT";
+  private const int heartbeatInterval = 1860000; // 1 hr 3600000 3660000
 
   public static async Task Main(string[] args)
   {
@@ -143,6 +142,8 @@ public class Program
           throw new Exception("Cannot receive name on it's own");
         case OpCodes.Message:
           throw new Exception("Cannot receive message on it's own");
+        default:
+          throw new Exception("Invalid Op code received");
       }
     }
     catch (Exception ex)

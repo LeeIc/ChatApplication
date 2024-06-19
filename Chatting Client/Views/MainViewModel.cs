@@ -6,6 +6,8 @@ using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
 using System.Timers;
+using Chatting_Client.CommunicationHelpers;
+using Chatting_Client.CommunicationHelpers.Enums;
 
 namespace Chatting_Client.Views
 {
@@ -49,7 +51,7 @@ namespace Chatting_Client.Views
     }
     private string message = string.Empty;
 
-    public ObservableCollection<string> Messages
+    public ObservableCollection<MessageData> Messages
     {
       get => messages;
       set
@@ -58,7 +60,7 @@ namespace Chatting_Client.Views
         OnPropertyChanged();
       }
     }
-    private ObservableCollection<string> messages;
+    private ObservableCollection<MessageData> messages;
 
     public bool IsUserSelectorVisible
     {
@@ -88,17 +90,17 @@ namespace Chatting_Client.Views
     private TcpClient? client;
     private NetworkStream? stream;
     private readonly System.Timers.Timer heartbeatTimer;
-    private const int heartbeatInterval = 3600000; // 1 hr 3600000
-    private const string heartbeatMessage = "HEARTBEAT";
+    private const int heartbeatInterval = 1800000; // 1 hr 3600000, 30 minutes 1800000
     private CancellationTokenSource heartbeatCancellationTokenSource;
     private bool isServerResponsive = true;
-
+    private TransmitHelper transmitHelper = new TransmitHelper();
+    private ReceiveHelper receiveHelper = new ReceiveHelper();
     #endregion
 
     #region Constructor
     public MainViewModel()
     {
-      messages = new ObservableCollection<string>();
+      messages = new ObservableCollection<MessageData>();
       SetupCommands();
       heartbeatTimer = new System.Timers.Timer(heartbeatInterval);
       heartbeatTimer.Elapsed += OnHeartbeatTimerElapsed;
@@ -135,19 +137,11 @@ namespace Chatting_Client.Views
         client = new TcpClient();
         if (!await TryConnectAsync(ip, int.Parse(port), 1000))
         {
-          DisplayMessage($"Error: Could not connect to Server");
+          DisplayMessage($"Could not connect to Server");
           return;
         }
         stream = client.GetStream();
         ClearMessages();
-        /*if (stream != null && stream.CanWrite)
-        {
-          string message = $"System: {Username} connected to the server";
-          byte[] buffer = Encoding.UTF8.GetBytes(message);
-          await stream.WriteAsync(buffer, 0, buffer.Length);
-          DisplayMessage(message);
-          Message = string.Empty;
-        }*/
         _ = Task.Run(async () => await ReceiveMessages());
         ShowConnectScreen(false);
       });
@@ -158,38 +152,41 @@ namespace Chatting_Client.Views
     {
       try
       {
-        if (client?.Connected == true && stream != null && stream.CanWrite)
+        if (client == null)
+          return;
+        if (client.Connected == true && stream != null && stream.CanWrite)
         {
-          string message = $"{Username}: {Message}";
-          byte[] buffer = Encoding.UTF8.GetBytes(message);
-          //await SendHeartbeat();
-          await stream.WriteAsync(buffer, 0, buffer.Length);
-          DisplayMessage($"[{DateTime.Now.ToString()}]\n" + message);
+          var messageData = new MessageData(Username, Message, DateTime.Now);
+          await transmitHelper.SendMessage(client, messageData);
+
+          DisplayMessage(messageData);
           Message = string.Empty;
         }
         else
         {
           client?.Close();
           ClearMessages();
-          DisplayMessage($"Error: Disconnect or stream cannot be written to");
+          DisplayMessage($"Disconnect or stream cannot be written to");
           ShowConnectScreen(true);
         }
       }
       catch (Exception ex)
       {
         ClearMessages();
-        DisplayMessage($"Error: {ex.Message}");
+        DisplayMessage($"{ex.Message}");
         ShowConnectScreen(true);
       }
     }
 
     private async void OnHeartbeatTimerElapsed(object? _, ElapsedEventArgs e)
     {
-      // Send heartbeat message to the server
-      _ = SendHeartbeat();
-      isServerResponsive = false;
+      if (client == null)
+        return;
       try
       {
+        // Send heartbeat message to the server
+        await transmitHelper.SendKeepAlive(client);
+        isServerResponsive = false;
         await Task.Delay(heartbeatInterval, heartbeatCancellationTokenSource.Token);
         if (!isServerResponsive)
         {
@@ -201,23 +198,13 @@ namespace Chatting_Client.Views
       {
         // Response received
       }
+      catch(Exception ex)
+      {
+        ClearMessages();
+        DisplayMessage($"{ex.Message}");
+        ShowConnectScreen(true);
+      }
       finally { heartbeatCancellationTokenSource = new CancellationTokenSource(); }
-    }
-
-    private async Task SendHeartbeat()
-    {
-      try
-      {
-        if (stream != null && stream.CanWrite)
-        {
-          byte[] buffer = Encoding.UTF8.GetBytes(heartbeatMessage);
-          await stream.WriteAsync(buffer, 0, buffer.Length);
-        }
-      }
-      catch (Exception)
-      {
-        OnServerDisconnected();
-      }
     }
 
     private void OnServerDisconnected()
@@ -245,6 +232,7 @@ namespace Chatting_Client.Views
         ShowConnectScreen(true);
       });
     }
+
     private async Task<bool> TryConnectAsync(string ip, int port, int timeout)
     {
       using (var cts = new CancellationTokenSource(timeout))
@@ -264,14 +252,14 @@ namespace Chatting_Client.Views
         }
         catch (Exception ex)
         {
-          Console.WriteLine($"Connection attempt failed: {ex.Message}");
+          DisplayMessage($"Connection attempt failed: {ex.Message}");
           client?.Close();  // Ensure the client is closed on any exception
           return false;
         }
       }
     }
 
-    private void DisplayMessage(string message)
+    private void DisplayMessage(MessageData message)
     {
       MainThread.BeginInvokeOnMainThread(() =>
       {
@@ -279,34 +267,28 @@ namespace Chatting_Client.Views
       });
     }
 
+    private void DisplayMessage(string message)
+    {
+      var notificationData = new MessageData();
+      notificationData.Name = "Notification";
+      notificationData.Message = message;
+      notificationData.DateTime = DateTime.Now;
+
+      MainThread.BeginInvokeOnMainThread(() =>
+      {
+        Messages.Add(notificationData);
+      });
+    }
     private async Task ReceiveMessages()
     {
-      byte[] buffer = new byte[1024];
-      int byteCount;
       heartbeatTimer.Start();
       while (stream != null)
       {
-        byteCount = await stream.ReadAsync(buffer, 0, buffer.Length);
-        string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
+        if (client == null)
+          throw new Exception("Client is null");
+        var opCodeAndPayload = await receiveHelper.Read(client);
 
-        if (message.Contains(heartbeatMessage))
-        {
-          isServerResponsive = true;
-          heartbeatCancellationTokenSource.Cancel();
-          continue; // Ignore heartbeat messages
-        }
-        else if (message == "" || new string(message.Where(c => !char.IsControl(c)).ToString()) == "" || message == " " || message == "  ")
-        {
-          continue; // Ignore empty messages
-        }
-        var request = new NotificationRequest
-        {
-          NotificationId = 1,
-          Title = $"New Message",
-          Description = message
-        };
-        await LocalNotificationCenter.Current.Show(request);
-        DisplayMessage(message);
+        await ProcessOpCodeAndPayload(client, opCodeAndPayload);
       }
     }
 
@@ -340,6 +322,52 @@ namespace Chatting_Client.Views
       var splitIpAddressAndPort = IpAddressAndPort.Split(":");
       ip = splitIpAddressAndPort[0];
       port = splitIpAddressAndPort[1];
+    }
+
+    private async Task ProcessOpCodeAndPayload(TcpClient client, (OpCodes, string) opCodeAndPayload)
+    {
+      OpCodes opCode = opCodeAndPayload.Item1;
+      string payload = opCodeAndPayload.Item2;
+      try
+      {
+        switch (opCode)
+        {
+          case OpCodes.HeartBeat:
+            isServerResponsive = true;
+            heartbeatCancellationTokenSource.Cancel();
+            break;
+          case OpCodes.ServerNotification:
+            DisplayMessage(payload);
+            break;
+          case OpCodes.DateTime:
+            var messageData = new MessageData();
+            // Using the server time instead of the client date time for now
+            messageData.DateTime = DateTime.Parse(payload);
+            // Assuming that if datetime is read, the next two is going to be name and message.
+            // Could use some error checking here in the future.
+            messageData.Name = (await receiveHelper.Read(client)).Item2;
+            messageData.Message = (await receiveHelper.Read(client)).Item2;
+            var request = new NotificationRequest
+            {
+              NotificationId = 1,
+              Title = $"New Message",
+              Description = messageData.Message
+            };
+            await LocalNotificationCenter.Current.Show(request);
+            DisplayMessage(messageData);
+            break;
+          case OpCodes.Name:
+            throw new Exception("Cannot receive name on it's own");
+          case OpCodes.Message:
+            throw new Exception("Cannot receive message on it's own");
+          default:
+            throw new Exception("Invalid Op code received");
+        }
+      }
+      catch (Exception ex)
+      {
+        // DisplayMessage($"Error Processing: {ex}"); Ignore these for now since it might spam empty messages if the server disonnnects
+      }
     }
 
     #endregion

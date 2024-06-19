@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
-using Chatting_Client.Views;
+﻿using Chatting_Client.Views;
 using Plugin.LocalNotification;
 namespace Chatting_Client
 {
@@ -19,7 +18,7 @@ namespace Chatting_Client
         });
 
 #if DEBUG
-      builder.Logging.AddDebug();
+     // builder.Logging.AddDebug();
 #endif
 
       return builder.Build();
