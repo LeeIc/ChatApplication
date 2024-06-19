@@ -99,6 +99,13 @@ public class Program
     }
     finally
     {
+      if (clientsData.ContainsKey(id))
+      {
+        clientsData[id].Timer.Elapsed -= OnHeartbeatTimerElapsed;
+        clientsData[id].Dispose();
+        clientsData.TryRemove(id, out _);
+      }
+
       Console.WriteLine($"{id} disconnected...");
     }
   }
