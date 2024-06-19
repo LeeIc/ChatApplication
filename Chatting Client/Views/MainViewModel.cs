@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Plugin.LocalNotification;
 using System.Collections.ObjectModel;
-using System.Text;
+using Microsoft.Maui.Storage;
 using CommunityToolkit.Mvvm.Input;
 using System.Timers;
 using Chatting_Client.CommunicationHelpers;
@@ -105,6 +105,9 @@ namespace Chatting_Client.Views
       heartbeatTimer = new System.Timers.Timer(heartbeatInterval);
       heartbeatTimer.Elapsed += OnHeartbeatTimerElapsed;
       heartbeatCancellationTokenSource = new CancellationTokenSource();
+
+      Username = Preferences.Get("Username", "Guest");
+      IpAddressAndPort = Preferences.Get("IpAddressAndPort", IpAddressAndPort);
     }
     #endregion
     #region Public Methods
@@ -140,6 +143,9 @@ namespace Chatting_Client.Views
           DisplayMessage($"Could not connect to Server");
           return;
         }
+        Preferences.Set("IpAddressAndPort", IpAddressAndPort);
+        Preferences.Set("Username", Username);
+
         stream = client.GetStream();
         ClearMessages();
         _ = Task.Run(async () => await ReceiveMessages());
