@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
+using System.Net.NetworkInformation;
 using System.Timers;
 
 public class Program
@@ -42,14 +42,28 @@ public class Program
 
   private static async Task StartServer()
   {
-    var ipAddress = "";
-    while (ipAddress == "")
+    List<string> lanIpAddresses = GetLocalIPAddress();
+    if (lanIpAddresses.Any())
     {
-      Console.Write("Enter Port: ");
-      ipAddress = Console.ReadLine();
+      Console.WriteLine("LAN IP Addresses:");
+      foreach (string ipAddress in lanIpAddresses)
+      {
+        Console.WriteLine(ipAddress);
+      }
+    }
+    else
+    {
+      Console.WriteLine("No LAN IP Addresses found.");
     }
 
-    TcpListener listener = new TcpListener(IPAddress.Any, int.Parse(ipAddress));
+    var port = "";
+    while (port == "")
+    {
+      Console.Write("Enter Port: ");
+      port = Console.ReadLine();
+    }
+
+    TcpListener listener = new TcpListener(IPAddress.Any, int.Parse(port));
     listener.Start();
     Console.WriteLine("Server started...");
 
@@ -166,4 +180,30 @@ public class Program
       Console.WriteLine($"Error Processing: {ex}");
     }
   }
+  static List<string> GetLocalIPAddress()
+  {
+    List<string> ipAddresses = new List<string>();
+
+    NetworkInterface[] networkInterfaces = NetworkInterface.GetAllNetworkInterfaces();
+
+    foreach (NetworkInterface ni in networkInterfaces)
+    {
+      if (ni.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+          ni.NetworkInterfaceType != NetworkInterfaceType.Tunnel &&
+          ni.GetIPProperties().GatewayAddresses.Any() &&
+          ni.GetIPProperties().UnicastAddresses.Any(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork))
+      {
+        foreach (UnicastIPAddressInformation ipAddressInfo in ni.GetIPProperties().UnicastAddresses)
+        {
+          if (ipAddressInfo.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+          {
+            ipAddresses.Add(ipAddressInfo.Address.ToString());
+          }
+        }
+      }
+    }
+
+    return ipAddresses;
+  }
+
 }
