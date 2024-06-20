@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Plugin.LocalNotification;
 using System.Collections.ObjectModel;
-using Microsoft.Maui.Storage;
 using CommunityToolkit.Mvvm.Input;
 using System.Timers;
 using Chatting_Client.CommunicationHelpers;
@@ -170,17 +169,12 @@ namespace Chatting_Client.Views
         }
         else
         {
-          client?.Close();
-          ClearMessages();
-          DisplayMessage($"Disconnect or stream cannot be written to");
-          ShowConnectScreen(true);
+          OnServerDisconnected();
         }
       }
       catch (Exception ex)
       {
-        ClearMessages();
-        DisplayMessage($"{ex.Message}");
-        ShowConnectScreen(true);
+        OnServerDisconnected();
       }
     }
 
@@ -206,9 +200,7 @@ namespace Chatting_Client.Views
       }
       catch(Exception ex)
       {
-        ClearMessages();
-        DisplayMessage($"{ex.Message}");
-        ShowConnectScreen(true);
+        OnServerDisconnected();
       }
       finally { heartbeatCancellationTokenSource = new CancellationTokenSource(); }
     }
