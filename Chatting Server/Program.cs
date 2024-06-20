@@ -27,6 +27,7 @@ public class Program
     finally
     {
       Console.WriteLine("Server shutting down...");
+      Console.ReadLine(); // Wait for user input before closing
     }
   }
 
@@ -41,7 +42,14 @@ public class Program
 
   private static async Task StartServer()
   {
-    TcpListener listener = new TcpListener(IPAddress.Any, 1857);
+    var ipAddress = "";
+    while (ipAddress == "")
+    {
+      Console.Write("Enter Port: ");
+      ipAddress = Console.ReadLine();
+    }
+
+    TcpListener listener = new TcpListener(IPAddress.Any, int.Parse(ipAddress));
     listener.Start();
     Console.WriteLine("Server started...");
 
