@@ -12,7 +12,7 @@ public class Program
   private static TransmitHelper transmitHelper = new TransmitHelper();
   private static ReceiveHelper receiveHelper = new ReceiveHelper();
 
-  private const int heartbeatInterval = 1860000; // 1 hr 3600000 3660000
+  private const int heartbeatInterval = 70000; // 1 hr 3600000 3660000
 
   public static async Task Main(string[] args)
   {
@@ -159,7 +159,7 @@ public class Program
           throw new Exception("Server cannot receive server notifications");
         case OpCodes.DateTime:
           // Using the server time instead of the client sent time for now
-          messageData.DateTime = DateTime.Now;
+          messageData.DateTime = DateTime.Parse(payload);
           // Assuming that if datetime is read, the next two is going to be name and message.
           // Could use some error checking here in the future.
           messageData.Name = (await receiveHelper.Read(client)).Item2;

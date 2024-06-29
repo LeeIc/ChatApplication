@@ -89,7 +89,7 @@ namespace Chatting_Client.Views
     private TcpClient? client;
     private NetworkStream? stream;
     private readonly System.Timers.Timer heartbeatTimer;
-    private const int heartbeatInterval = 1800000; // 1 hr 3600000, 30 minutes 1800000
+    private const int heartbeatInterval = 60000; // 1 hr 3600000, 30 minutes 1800000
     private CancellationTokenSource heartbeatCancellationTokenSource;
     private bool isServerResponsive = true;
     private TransmitHelper transmitHelper = new TransmitHelper();
